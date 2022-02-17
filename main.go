@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/csv"
+	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -9,33 +11,62 @@ import (
 	"strings"
 )
 
-const VERSION = "1.0.0"
+const VERSION = "1.1.0"
 
 func main() {
-	if len(os.Args) < 2 {
-		usage()
-		os.Exit(1)
-	}
+	log.SetFlags(0)
+	switch len(os.Args) {
+		case 1: // first we read data from stdin and then convert it
+			data, err := readRawCsv()
+			if err != nil {
+				log.Fatal(err)
+			}
+			print(data)
 
-	src, err := ExpandPath(os.Args[1])
-	if err != nil {
-		panic(err)
-	}
-	if _, err := os.Stat(src); err != nil {
-		panic(err)
-	}
+		case 2: // but if 2nd arg is present
+			// probably user wants to get help
+			help1 := flag.Bool("h", false, "Get help")
+			help2 := flag.Bool("help", false, "Get help")
+			flag.Parse()
+			if os.Args[1] == "help" || *help1 || *help2 {
+				usage(os.Stdout)
+				os.Exit(0)
+			}
 
-	result := convert(readCsv(src))
+			// ...or to convert data from file
+			src, err := ExpandPath(os.Args[1])
+			if err != nil {
+				log.Fatal(err)
+			}
+			if _, err := os.Stat(src); err != nil {
+				log.Fatal(err)
+			}
+
+			data, err := readCsvFile(src)
+			if err != nil {
+				log.Fatal(err)
+			}
+			print(data)
+
+		// otherwise let's show usage help and exit (probably inaccessible code, but anyway)
+		default:
+			usage(os.Stdout)
+			os.Exit(0)
+	}
+}
+
+// print write converted data to stdout
+func print(data [][]string) {
+	if len(data) == 0 {
+		usage(os.Stderr)
+	}
+	result := convert(data)
 	for _, row := range result {
 		fmt.Println(row)
 	}
 }
 
-func usage() {
-	fmt.Fprintln(os.Stderr, "csv2md v" + VERSION)
-	fmt.Fprintln(os.Stderr, "Usage: csv2md data.csv > data.md")
-}
-
+// ExpandPath return absolute path to file replacing ~ to user's home folder
 func ExpandPath(path string) (string, error) {
 	homepath, err := os.UserHomeDir()
 	if err != nil {
@@ -45,22 +76,34 @@ func ExpandPath(path string) (string, error) {
 	return newpath, err
 }
 
-func readCsv(filePath string) [][]string {
+// readRawCsv read data from file
+func readCsvFile(filePath string) ([][]string, error) {
     f, err := os.Open(filePath)
     if err != nil {
-        log.Fatal("Unable to read input file " + filePath, err)
+    	return nil, errors.New("Failed to open file '" + filePath + "': " + err.Error())
     }
     defer f.Close()
 
     csvReader := csv.NewReader(f)
     records, err := csvReader.ReadAll()
     if err != nil {
-        log.Fatal("Unable to parse file as CSV for " + filePath, err)
+    	return nil, errors.New("Failed to parse CSV from file '" + filePath + "': " + err.Error())
     }
 
-    return records
+    return records, nil
 }
 
+// readRawCsv read data from stdin
+func readRawCsv() ([][]string, error) {
+    csvReader := csv.NewReader(os.Stdin)
+    records, err := csvReader.ReadAll()
+    if err != nil {
+    	return nil, errors.New("Failed to parse CSV from stdin: " + err.Error())
+    }
+    return records, nil
+}
+
+// convert format data from file or stdin as markdown
 func convert(records [][]string) []string {
 	var result []string
 	for idx, row := range records {
@@ -78,4 +121,28 @@ func convert(records [][]string) []string {
 		}
 	}
 	return result
+}
+
+// usage print help into writer
+func usage(writer *os.File) {
+	usage := []string{
+		"csv2md v" + VERSION,
+		"Anthony Axenov (c) 2022, MIT license",
+		"https://github.com/anthonyaxenov/csv2md",
+		"",
+		"Usage:",
+		"\tcsv2md (-h|-help|--help|help)    # to get this help",
+		"\tcsv2md example.csv               # convert data from file and write result in stdout",
+		"\tcsv2md < example.csv             # convert data from stdin and write result in stdout",
+		"\tcat example.csv | csv2md         # convert data from stdin and write result in stdout",
+		"\tcsv2md example.csv > example.md  # convert data from file and write result in new file",
+		"\tcsv2md example.csv | less        # convert data from file and write result in stdout using pager",
+		"\tcsv2md                           # paste or type data to stdin by hands",
+		"\t                                 # press Ctrl+D to view result in stdout",
+		"\tcsv2md > example.md              # paste or type data to stdin by hands",
+		"\t                                 # press Ctrl+D to write result in new file",
+	}
+	for _, str := range usage {
+		fmt.Fprintln(writer, str)
+	}
 }
