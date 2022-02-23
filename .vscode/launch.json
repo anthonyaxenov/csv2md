@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug csv2md",
+            "name": "csv",
             "type": "go",
             "request": "launch",
             "mode": "auto",
@@ -15,15 +15,61 @@
             ]
         },
         {
-            "name": "Debug csv2md (tsv)",
+            "name": "csv aligned",
             "type": "go",
             "request": "launch",
             "mode": "auto",
             "program": "main.go",
             "args": [
-                "-t",
-                "-f=example.tsv",
+                "-f=example.csv",
+                "-a"
             ]
-        }
+        },
+        {
+            "name": "csv header",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "main.go",
+            "args": [
+                "-f=example.csv",
+                "-h=\"My Header\"",
+            ]
+        },
+        {
+            "name": "tsv",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "main.go",
+            "args": [
+                "-f=example.tsv",
+                "-t"
+            ]
+        },
+        {
+            "name": "tsv aligned",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "main.go",
+            "args": [
+                "-f=example.tsv",
+                "-t",
+                "-a"
+            ]
+        },
+        {
+            "name": "tsv header",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "main.go",
+            "args": [
+                "-f=example.tsv",
+                "-h=\"My Header\"",
+                "-t"
+            ]
+        },
     ]
 }
