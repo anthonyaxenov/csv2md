@@ -11,47 +11,40 @@ import (
 	"strings"
 )
 
-const VERSION = "1.1.0"
+const VERSION = "1.2.0"
 
 func main() {
 	log.SetFlags(0)
-	switch len(os.Args) {
-		case 1: // first we read data from stdin and then convert it
-			data, err := readRawCsv()
-			if err != nil {
-				log.Fatal(err)
-			}
-			print(data)
+	filepath := flag.String("f", "", "File path")
+	is_help := flag.Bool("help", false, "Get help")
+	as_tsv := flag.Bool("t", false, "Parse as tsv")
+	flag.Parse()
 
-		case 2: // but if 2nd arg is present
-			// probably user wants to get help
-			help1 := flag.Bool("h", false, "Get help")
-			help2 := flag.Bool("help", false, "Get help")
-			flag.Parse()
-			if os.Args[1] == "help" || *help1 || *help2 {
-				usage(os.Stdout)
-				os.Exit(0)
-			}
+	if *is_help {
+		usage(os.Stdout)
+		os.Exit(0)
+	}
 
-			// ...or to convert data from file
-			src, err := ExpandPath(os.Args[1])
-			if err != nil {
-				log.Fatal(err)
-			}
-			if _, err := os.Stat(src); err != nil {
-				log.Fatal(err)
-			}
+	if *filepath == "" {
+		data, err := readRawCsv(*as_tsv)
+		if err != nil {
+			log.Fatal(err)
+		}
+		print(data)
+	} else {
+		src, err := ExpandPath(*filepath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if _, err := os.Stat(src); err != nil {
+			log.Fatal(err)
+		}
 
-			data, err := readCsvFile(src)
-			if err != nil {
-				log.Fatal(err)
-			}
-			print(data)
-
-		// otherwise let's show usage help and exit (probably inaccessible code, but anyway)
-		default:
-			usage(os.Stdout)
-			os.Exit(0)
+		data, err := readCsvFile(src, *as_tsv)
+		if err != nil {
+			log.Fatal(err)
+		}
+		print(data)
 	}
 }
 
@@ -77,7 +70,7 @@ func ExpandPath(path string) (string, error) {
 }
 
 // readRawCsv read data from file
-func readCsvFile(filePath string) ([][]string, error) {
+func readCsvFile(filePath string, as_tsv bool) ([][]string, error) {
     f, err := os.Open(filePath)
     if err != nil {
     	return nil, errors.New("Failed to open file '" + filePath + "': " + err.Error())
@@ -85,21 +78,30 @@ func readCsvFile(filePath string) ([][]string, error) {
     defer f.Close()
 
     csvReader := csv.NewReader(f)
+	if as_tsv {
+		csvReader.Comma = '\t'
+	}
+
     records, err := csvReader.ReadAll()
     if err != nil {
-    	return nil, errors.New("Failed to parse CSV from file '" + filePath + "': " + err.Error())
+    	return nil, errors.New("Failed to parse file '" + filePath + "': " + err.Error())
     }
 
     return records, nil
 }
 
 // readRawCsv read data from stdin
-func readRawCsv() ([][]string, error) {
+func readRawCsv(as_tsv bool) ([][]string, error) {
     csvReader := csv.NewReader(os.Stdin)
+	if as_tsv {
+		csvReader.Comma = '\t'
+	}
+
     records, err := csvReader.ReadAll()
     if err != nil {
-    	return nil, errors.New("Failed to parse CSV from stdin: " + err.Error())
+    	return nil, errors.New("Failed to parse input from stdin: " + err.Error())
     }
+
     return records, nil
 }
 
@@ -127,20 +129,25 @@ func convert(records [][]string) []string {
 func usage(writer *os.File) {
 	usage := []string{
 		"csv2md v" + VERSION,
-		"Anthony Axenov (c) 2022, MIT license",
+		"Anthony Axenov (c) 2022, MIT License",
 		"https://github.com/anthonyaxenov/csv2md",
 		"",
 		"Usage:",
-		"\tcsv2md (-h|-help|--help|help)    # to get this help",
-		"\tcsv2md example.csv               # convert data from file and write result in stdout",
-		"\tcsv2md < example.csv             # convert data from stdin and write result in stdout",
-		"\tcat example.csv | csv2md         # convert data from stdin and write result in stdout",
-		"\tcsv2md example.csv > example.md  # convert data from file and write result in new file",
-		"\tcsv2md example.csv | less        # convert data from file and write result in stdout using pager",
-		"\tcsv2md                           # paste or type data to stdin by hands",
-		"\t                                 # press Ctrl+D to view result in stdout",
-		"\tcsv2md > example.md              # paste or type data to stdin by hands",
-		"\t                                 # press Ctrl+D to write result in new file",
+		"\tcsv2md [-help|--help] [-t] [-f <FILE>]",
+		"",
+		"Available arguments:",
+		"\t-help|--help        - get this help",
+		"\t-f=<FILE>|-f <FILE> - convert specified FILE",
+		"\t-t                  - convert input as TSV",
+		"",
+		"FILE formats supported:",
+		"\t- csv (default)",
+		"\t- tsv (with -t flag)",
+		"",
+		"Path to FILE may be presented as:",
+		"\t- absolute",
+		"\t- relative to current working directory",
+		"\t- relative to user home directory (~)",
 	}
 	for _, str := range usage {
 		fmt.Fprintln(writer, str)

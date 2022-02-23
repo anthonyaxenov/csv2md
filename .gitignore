@@ -1,5 +1,6 @@
 /bin
 # /.vscode
 *.csv
+*.tsv
 *.md
 !example.csv
