@@ -15,23 +15,27 @@ const VERSION = "1.2.0"
 
 func main() {
 	log.SetFlags(0)
-	filepath := flag.String("f", "", "File path")
 	is_help := flag.Bool("help", false, "Get help")
-	as_tsv := flag.Bool("t", false, "Parse as tsv")
+	filepath := flag.String("f", "", "File path")
+	header := flag.String("h", "", "Add main header (h1)")
+	as_tsv := flag.Bool("t", false, "Parse input as tsv")
+	aligned := flag.Bool("a", false, "Align columns width")
 	flag.Parse()
 
+	// show help
 	if *is_help {
 		usage(os.Stdout)
 		os.Exit(0)
 	}
 
-	if *filepath == "" {
-		data, err := readRawCsv(*as_tsv)
+	// if filepath is not provided then convert data from stdin
+	if len(*filepath) == 0 {
+		data, err := ReadStdin(*as_tsv)
 		if err != nil {
 			log.Fatal(err)
 		}
-		print(data)
-	} else {
+		Print(Convert(*header, data, *aligned))
+	} else { // otherwise convert data from file
 		src, err := ExpandPath(*filepath)
 		if err != nil {
 			log.Fatal(err)
@@ -40,26 +44,26 @@ func main() {
 			log.Fatal(err)
 		}
 
-		data, err := readCsvFile(src, *as_tsv)
+		data, err := ReadFile(src, *as_tsv)
 		if err != nil {
 			log.Fatal(err)
 		}
-		print(data)
+		Print(Convert(*header, data, *aligned))
 	}
 }
 
-// print write converted data to stdout
-func print(data [][]string) {
+// Print writes converted data to stdout
+func Print(data []string) {
 	if len(data) == 0 {
 		usage(os.Stderr)
 	}
-	result := convert(data)
-	for _, row := range result {
+
+	for _, row := range data {
 		fmt.Println(row)
 	}
 }
 
-// ExpandPath return absolute path to file replacing ~ to user's home folder
+// ExpandPath returns absolute path to file replacing ~ to user's home folder
 func ExpandPath(path string) (string, error) {
 	homepath, err := os.UserHomeDir()
 	if err != nil {
@@ -69,8 +73,8 @@ func ExpandPath(path string) (string, error) {
 	return newpath, err
 }
 
-// readRawCsv read data from file
-func readCsvFile(filePath string, as_tsv bool) ([][]string, error) {
+// ReadFile reads data from file
+func ReadFile(filePath string, as_tsv bool) ([][]string, error) {
     f, err := os.Open(filePath)
     if err != nil {
     	return nil, errors.New("Failed to open file '" + filePath + "': " + err.Error())
@@ -90,8 +94,8 @@ func readCsvFile(filePath string, as_tsv bool) ([][]string, error) {
     return records, nil
 }
 
-// readRawCsv read data from stdin
-func readRawCsv(as_tsv bool) ([][]string, error) {
+// ReadStdin reads data from stdin
+func ReadStdin(as_tsv bool) ([][]string, error) {
     csvReader := csv.NewReader(os.Stdin)
 	if as_tsv {
 		csvReader.Comma = '\t'
@@ -105,19 +109,54 @@ func readRawCsv(as_tsv bool) ([][]string, error) {
     return records, nil
 }
 
-// convert format data from file or stdin as markdown
-func convert(records [][]string) []string {
+// Convert formats data from file or stdin as markdown
+func Convert(header string, records [][]string, aligned bool) []string {
 	var result []string
-	for idx, row := range records {
+
+	// add h1 if passed
+	header = strings.Trim(header, "\t\r\n ")
+	if len(header) != 0 {
+		result = append(result, "# " + header)
+		result = append(result, "")
+	}
+
+	// if user wants aligned columns width then we
+	// count max length of every value in every column
+	widths := make(map[int]int)
+	if aligned {
+		for _, row := range records {
+			for col_idx, col := range row {
+				length := len(col)
+				if len(widths) == 0 || widths[col_idx] < length {
+					widths[col_idx] = length
+				}
+			}
+		}
+	}
+
+	// build markdown table
+	for row_idx, row := range records {
+
+		// table content
 		str := "| "
-		for _, col := range row {
-			str += col + " | "
+		for col_idx, col := range row {
+			if aligned {
+				str += fmt.Sprintf("%-*s | ", widths[col_idx], col)
+			} else {
+				str += col + " | "
+			}
 		}
 		result = append(result, str)
-		if idx == 0 {
+
+		// content separator only after first row (header)
+		if row_idx == 0 {
 			str := "| "
-			for range row {
-				str += "--- | "
+			for col_idx := range row {
+				if !aligned || widths[col_idx] < 3 {
+					str += "--- | "
+				} else {
+					str += strings.Repeat("-", widths[col_idx]) + " | "
+				}
 			}
 			result = append(result, str)
 		}
@@ -125,7 +164,7 @@ func convert(records [][]string) []string {
 	return result
 }
 
-// usage print help into writer
+// usage Print help into writer
 func usage(writer *os.File) {
 	usage := []string{
 		"csv2md v" + VERSION,
@@ -133,12 +172,14 @@ func usage(writer *os.File) {
 		"https://github.com/anthonyaxenov/csv2md",
 		"",
 		"Usage:",
-		"\tcsv2md [-help|--help] [-t] [-f <FILE>]",
+		"\tcsv2md [-help|--help] [-f=<FILE>] [-h=<HEADER>] [-t] [-a]",
 		"",
 		"Available arguments:",
-		"\t-help|--help        - get this help",
-		"\t-f=<FILE>|-f <FILE> - convert specified FILE",
-		"\t-t                  - convert input as TSV",
+		"\t-help|--help   - show this help",
+		"\t-f=<FILE>      - Convert specified FILE",
+		"\t-h=<HEADER>    - add main header (h1) to result",
+		"\t-t             - Convert input as tsv",
+		"\t-a             - align columns width",
 		"",
 		"FILE formats supported:",
 		"\t- csv (default)",
@@ -148,6 +189,9 @@ func usage(writer *os.File) {
 		"\t- absolute",
 		"\t- relative to current working directory",
 		"\t- relative to user home directory (~)",
+		"",
+		"Both HEADER and FILE path with whitespaces must be double-quoted.",
+		"To save result as separate file you should use redirection operators (> or >>).",
 	}
 	for _, str := range usage {
 		fmt.Fprintln(writer, str)
