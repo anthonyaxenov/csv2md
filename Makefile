@@ -1,6 +1,3 @@
-# https://habr.com/ru/post/461467/
-# https://tutorialedge.net/golang/makefiles-for-go-developers/
-# https://earthly.dev/blog/golang-makefile/
 BINARY_NAME=csv2md
 ARCH=amd64
 
@@ -41,7 +38,7 @@ release: clean darwin linux win
 	@zip -j ${DARWIN_PATH}.zip ${DARWIN_FILE}
 	@zip -j ${WINDOWS_PATH}.zip ${WINDOWS_FILE}
 
-## compile: This message
+## help: This message
 help: Makefile
 	@echo "Choose a command run:"
 	@sed -n 's/^##//p' $< | column -t -s ':' |  sed -e 's/^/ /'
