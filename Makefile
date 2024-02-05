@@ -29,7 +29,7 @@ darwin:
 	@rm -rf ${DARWIN_PATH}
 	@GOARCH=${ARCH} GOOS=darwin go build -o ${DARWIN_FILE} . && echo "Compiled: ${DARWIN_FILE}"
 
-## build: Build new binaries for linux, windows and darwin (x64)
+## all: Build new binaries for linux, windows and darwin (x64)
 all: clean linux win darwin
 
 ## release: Build all binaries and zip them
